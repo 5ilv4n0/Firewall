@@ -17,8 +17,9 @@ class Firewall(object):
 
     counter = {}
 
-    def __init__(self, policy='DROP'):
+    def __init__(self, wan_interface, policy='DROP'):
         self.policy = policy
+        self.wan_interface = wan_interface
 
         self.flush()
         self.set_policy(self.policy)
@@ -27,8 +28,8 @@ class Firewall(object):
         self.enable_stateful_filtering('INPUT')
         self.enable_stateful_filtering('OUTPUT')
 
-        self.prepare_FW_2_WAN_chain('wlan0')
-        self.prepare_WAN_2_FW_chain('wlan0')
+        self.prepare_FW_2_WAN_chain()
+        self.prepare_WAN_2_FW_chain()
 
 
     #os.system('iptables -I INPUT ! -i lo -s 127.0.0.0/8 -j DROP')
@@ -39,17 +40,17 @@ class Firewall(object):
         os.system(self.FW + ' -A TRAFFIC_OUT -p udp')
         os.system(self.FW + ' -A TRAFFIC_OUT -p icmp')
 
-    def prepare_FW_2_WAN_chain(self, wan_interface):
+    def prepare_FW_2_WAN_chain(self):
         self.create_chain('FW_2_WAN')
         self.add_rule('FW_2_WAN', '', 'LOG', '--log-prefix "WALL: FW_2_WAN->DROP:" --log-level 6')
         self.add_rule('FW_2_WAN', '', self.policy)
-        self.add_rule('OUTPUT', '-o ' + wan_interface, 'FW_2_WAN')
+        self.add_rule('OUTPUT', '-o ' + self.wan_interface, 'FW_2_WAN')
 
-    def prepare_WAN_2_FW_chain(self, wan_interface):
+    def prepare_WAN_2_FW_chain(self):
         self.create_chain('WAN_2_FW')
         self.add_rule('WAN_2_FW', '', 'LOG', '--log-prefix "WALL: WAN_2_FW->DROP:" --log-level 6')
         self.add_rule('WAN_2_FW', '', self.policy)
-        self.add_rule('INPUT', '-i ' + wan_interface, 'WAN_2_FW')
+        self.add_rule('INPUT', '-i ' + self.wan_interface, 'WAN_2_FW')
 
 
     def insert_outgoing_rule(self, protocol, destination_port, accept, logging=False):
@@ -142,7 +143,7 @@ ACCEPT = 'ACCEPT'
 DROP = 'DROP'
 
 
-fw = Firewall()
+fw = Firewall('wlan0')
 
 fw.insert_outgoing_rule('icmp', 'all', ACCEPT)
 fw.insert_outgoing_rule('tcp', 'all', ACCEPT)
