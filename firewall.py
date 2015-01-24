@@ -86,7 +86,7 @@ class Firewall(object):
         self.execute(rule)
 
     def execute(self, command):
-        if os.popen(command).read() != '':
+        if os.popen('sudo '+ command).read() != '':
             return False
         return True
 
@@ -163,14 +163,12 @@ class Firewall(object):
 
 
 
-fw = Firewall(WAN='wlan0', POLICY=True)
-
-fw.input_rule('tcp', 80, 'wlan0', False)
-fw.output_rule('tcp', 22, 'wlan0', True)
-fw.forward_rule('eth0', '10.10.0.0/16','tcp',443, None)
-fw.port_forwarding_rule('tcp',10022,'10.10.0.2',22)
-
-
+# fw = Firewall(WAN='wlan0', POLICY=True)
+#
+# fw.input_rule('tcp', 80, 'wlan0', False)
+# fw.output_rule('tcp', 22, 'wlan0', True)
+# fw.forward_rule('eth0', '10.10.0.0/16','tcp',443, None)
+# fw.port_forwarding_rule('tcp',10022,'10.10.0.2',22)
 
 
 
@@ -181,22 +179,7 @@ fw.port_forwarding_rule('tcp',10022,'10.10.0.2',22)
 
 
 
-
-
-
-
-
-
-
-sys.exit()
-
-
-
-
-
-
-
-class Firewall(object):
+class Firewall2(object):
     FW = '/sbin/iptables'
     if not os.path.exists(FW):
         print 'FW not found! Abort!'
@@ -336,21 +319,21 @@ class Firewall(object):
 
 
 
-fw = Firewall('wlan0')
-
-fw.insert_outgoing_rule('icmp', 'all', fw.ACCEPT)
-fw.insert_outgoing_rule('tcp', 'all', fw.ACCEPT)
-fw.insert_outgoing_rule('udp', 'all', fw.ACCEPT)
-fw.activate_traffic_accounting()
-
-
-
-fw.insert_incoming_rule('icmp', 'all', ACCEPT)
-fw.insert_incoming_rule('tcp', 22, ACCEPT)
-fw.insert_incoming_rule('tcp', 443, ACCEPT)
-fw.insert_incoming_rule('tcp', 8080, ACCEPT)
-fw.insert_incoming_rule('tcp', 8023, ACCEPT)
-fw.insert_incoming_rule('tcp', 8784, ACCEPT)
-fw.insert_incoming_rule('tcp', 10443, ACCEPT)
-fw.insert_incoming_rule('tcp', 8081, ACCEPT)
-fw.insert_incoming_rule('udp', 1194, ACCEPT)
+# fw = Firewall2('wlan0')
+#
+# fw.insert_outgoing_rule('icmp', 'all', fw.ACCEPT)
+# fw.insert_outgoing_rule('tcp', 'all', fw.ACCEPT)
+# fw.insert_outgoing_rule('udp', 'all', fw.ACCEPT)
+# fw.activate_traffic_accounting()
+#
+#
+#
+# fw.insert_incoming_rule('icmp', 'all', ACCEPT)
+# fw.insert_incoming_rule('tcp', 22, ACCEPT)
+# fw.insert_incoming_rule('tcp', 443, ACCEPT)
+# fw.insert_incoming_rule('tcp', 8080, ACCEPT)
+# fw.insert_incoming_rule('tcp', 8023, ACCEPT)
+# fw.insert_incoming_rule('tcp', 8784, ACCEPT)
+# fw.insert_incoming_rule('tcp', 10443, ACCEPT)
+# fw.insert_incoming_rule('tcp', 8081, ACCEPT)
+# fw.insert_incoming_rule('udp', 1194, ACCEPT)
