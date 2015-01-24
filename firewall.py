@@ -19,6 +19,7 @@ class Firewall(object):
                         OUTPUT=self.chain_policies['OUTPUT'])
 
         self.allow_loopback_input()
+        self.deny_wrong_loopback_input()
         self.activate_statefull_firewall()
 
         self.wan_interface = self.get_wan_interface_from_keyword_args()
@@ -71,6 +72,9 @@ class Firewall(object):
 
     def allow_loopback_input(self):
         return self.execute('iptables -A INPUT -i lo -j ACCEPT')
+
+    def deny_wrong_loopback_input(self):
+        return self.execute('iptables -I INPUT ! -i lo -s 127.0.0.0/8 -j DROP')
 
     def activate_statefull_firewall(self):
         rules = (   'iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT',
@@ -163,12 +167,13 @@ class Firewall(object):
 
 
 
-# fw = Firewall(WAN='wlan0', POLICY=True)
-#
-# fw.input_rule('tcp', 80, 'wlan0', False)
-# fw.output_rule('tcp', 22, 'wlan0', True)
-# fw.forward_rule('eth0', '10.10.0.0/16','tcp',443, None)
-# fw.port_forwarding_rule('tcp',10022,'10.10.0.2',22)
+
+
+
+
+
+
+
 
 
 
