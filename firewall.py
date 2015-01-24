@@ -2,6 +2,197 @@
 # -*- coding: utf-8 -*-
 
 import os, sys
+import json
+
+class Firewall(object):
+
+    def __init__(self, **keyword_args):
+        self.keyword_args = keyword_args
+
+        self.policy = self.get_policy_from_keyword_args()
+        self.chain_policies = self.get_chain_policies_from_keyword_args()
+
+        self.flush()
+        self.set_policy(self.policy,
+                        INPUT=self.chain_policies['INPUT'],
+                        FORWARD=self.chain_policies['FORWARD'],
+                        OUTPUT=self.chain_policies['OUTPUT'])
+
+        self.allow_loopback_input()
+        self.activate_statefull_firewall()
+
+        self.wan_interface = self.get_wan_interface_from_keyword_args()
+        self.lan_interfaces = self.get_lan_interfaces_from_keyword_args()
+
+        if not self.lan_interfaces == False:
+            self.init_forwarding()
+
+
+
+
+    def get_policy_from_keyword_args(self):
+        if 'POLICY' in self.keyword_args.keys():
+            return self.keyword_args['POLICY']
+        return False
+
+    def get_chain_policies_from_keyword_args(self):
+        chains = ['INPUT', 'FORWARD', 'OUTPUT']
+        chain_policies = {'INPUT': self.policy, 'FORWARD': self.policy, 'OUTPUT': self.policy}
+        for id, chain in enumerate(chains):
+            try:
+                chain_policies[chains[id]] = self.keyword_args[chains[id]]
+            except KeyError:
+                pass
+        return chain_policies
+
+    def flush(self):
+        for rule in ('iptables -F', 'iptables -X', 'iptables -t nat -F'):
+            self.execute(rule)
+
+    def set_policy(self, policy, **keyword_args):
+        if policy == False:
+            policy = 'DROP'
+        elif policy == True:
+            policy = 'ACCEPT'
+
+        rule_template = 'iptables -P '
+
+        for chain in ('INPUT', 'FORWARD', 'OUTPUT'):
+            if chain in keyword_args.keys():
+                if keyword_args[chain]:
+                    rule = (rule_template, chain, 'ACCEPT')
+                else:
+                    rule = (rule_template, chain, 'DROP')
+            else:
+                rule = (rule_template, chain, policy)
+
+            command = ' '.join(rule)
+            self.execute(command)
+
+    def allow_loopback_input(self):
+        return self.execute('iptables -A INPUT -i lo -j ACCEPT')
+
+    def activate_statefull_firewall(self):
+        rules = (   'iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT',
+                    'iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT',
+                    'iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT')
+        for rule in rules:
+            self.execute(rule)
+
+    def init_forwarding(self):
+        sysctl_command = 'sysctl -w net.ipv4.ip_forward=1'
+        rule = 'iptables -t nat -A POSTROUTING -o ' + self.wan_interface + ' -j MASQUERADE'
+        os.system(sysctl_command)
+        self.execute(rule)
+
+    def execute(self, command):
+        if os.popen(command).read() != '':
+            return False
+        return True
+
+    def get_lan_interfaces_from_keyword_args(self):
+        try:
+            lan_interfaces = self.keyword_args['LAN']
+            if lan_interfaces == False:
+                raise KeyError
+            if ',' in lan_interfaces:
+                lan_interfaces = lan_interfaces.split(',')
+                return lan_interfaces
+            else:
+                return [lan_interfaces]
+        except KeyError:
+            print 'No LAN interface selected! Use local FW only!'
+            return False
+
+    def get_wan_interface_from_keyword_args(self):
+        try:
+            return self.keyword_args['WAN']
+        except KeyError:
+            print 'No WAN interface selected! Abort!'
+            sys.exit(1)
+
+    def input_rule(self, protocol, target_port=False, interface=False, accept=True):
+        target = 'DROP'
+        if accept == True:
+            target = 'ACCEPT'
+        elif accept == None:
+            target = 'REJECT'
+        rule = 'iptables -A INPUT '
+        if not interface == False:
+            rule += '-i ' + interface
+        rule += ' -p ' + protocol
+        if not target_port == False:
+            rule += ' --dport ' + str(target_port)
+        rule += ' -j ' + target
+        self.execute(rule)
+
+    def output_rule(self, protocol, target_port=False, interface=False, accept=True):
+        target = 'DROP'
+        if accept == True:
+            target = 'ACCEPT'
+        elif accept == None:
+            target = 'REJECT'
+        rule = 'iptables -A OUTPUT '
+        if not interface == False:
+            rule += '-o ' + interface
+        rule += ' -p ' + protocol
+        if not target_port == False:
+            rule += ' --dport ' + str(target_port)
+        rule += ' -j ' + target
+        self.execute(rule)
+
+    def forward_rule(self, lan_interface, network, protocol, target_port, accept=True):
+        target = 'DROP'
+        if accept == True:
+            target = 'ACCEPT'
+        elif accept == None:
+            target = 'REJECT'
+        rule = 'iptables -A FORWARD -i ' + lan_interface + ' -o ' + self.wan_interface + ' -s ' + network + ' -p ' + protocol + ' -m ' + protocol + ' --dport ' + str(target_port) + ' -j ' + target
+        self.execute(rule)
+
+    def port_forwarding_rule(self, protocol, extern_port, target_ip, target_port=False):
+        rule_1 = 'iptables -t nat -A PREROUTING -i ' + self.wan_interface + ' -p ' + protocol + ' --dport ' + str(extern_port) + ' -j DNAT --to '+ target_ip
+        if not target_port == False:
+            rule_1 += ':' + str(target_port)
+        else:
+            target_port = extern_port
+        rule_2 = 'iptables -A FORWARD -p ' + protocol + ' -d ' + target_ip + ' --dport ' + str(target_port) + ' -j ACCEPT'
+        self.execute(rule_1)
+        self.execute(rule_2)
+
+
+
+
+fw = Firewall(WAN='wlan0', POLICY=True)
+
+fw.input_rule('tcp', 80, 'wlan0', False)
+fw.output_rule('tcp', 22, 'wlan0', True)
+fw.forward_rule('eth0', '10.10.0.0/16','tcp',443, None)
+fw.port_forwarding_rule('tcp',10022,'10.10.0.2',22)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+sys.exit()
+
+
+
+
 
 
 
@@ -14,6 +205,8 @@ class Firewall(object):
 
     CHAINS = ['INPUT','FORWARD','OUTPUT','PREROUTING', 'POSTROUTING']
     MAIN_CHAINS = CHAINS[:3]
+    ACCEPT = 'ACCEPT'
+    DROP = 'DROP'
 
     counter = {}
 
@@ -53,6 +246,10 @@ class Firewall(object):
         self.add_rule('INPUT', '-i ' + self.wan_interface, 'WAN_2_FW')
 
 
+    def activate_nat_traffic_from_intern(self):
+        command = 'iptables -t nat -A POSTROUTING -o ' + self.wan_interface + ' -j MASQUERADE'
+        self.__execute(command)
+
     def insert_outgoing_rule(self, protocol, destination_port, accept, logging=False):
         if destination_port == -1 or destination_port == 'all':
             destination_port = ''
@@ -85,11 +282,8 @@ class Firewall(object):
             self.insert_rule(self.counter['WAN_2_FW'], 'WAN_2_FW', match, 'LOG', '--log-prefix "WALL: WAN_2_FW['+protocol+'('+str(destination_port)+')]->'+target+':" --log-level 6')
             self.counter['WAN_2_FW'] += 1
 
-
-
     def activate_traffic_accounting(self):
         self.insert_rule(1, 'OUTPUT', '', 'TRAFFIC_OUT')
-
 
     def flush(self):
         commands = ['-F','-X','-t nat -F']
@@ -109,6 +303,7 @@ class Firewall(object):
 
     def allow_loopback(self):
         self.add_rule('INPUT', '-i lo', 'ACCEPT')
+        self.add_rule('OUTPUT', '-o lo', 'ACCEPT')
 
     def add_rule(self, chain, match, target, target_parameter=''):
         template = [self.FW, '-A', chain, match, '-j', target, target_parameter]
@@ -139,15 +334,13 @@ class Firewall(object):
 
 
 
-ACCEPT = 'ACCEPT'
-DROP = 'DROP'
 
 
 fw = Firewall('wlan0')
 
-fw.insert_outgoing_rule('icmp', 'all', ACCEPT)
-fw.insert_outgoing_rule('tcp', 'all', ACCEPT)
-fw.insert_outgoing_rule('udp', 'all', ACCEPT)
+fw.insert_outgoing_rule('icmp', 'all', fw.ACCEPT)
+fw.insert_outgoing_rule('tcp', 'all', fw.ACCEPT)
+fw.insert_outgoing_rule('udp', 'all', fw.ACCEPT)
 fw.activate_traffic_accounting()
 
 
